@@ -136,6 +136,11 @@ if [ "$WANDB_ENABLED" = "true" ]; then
     CMD="$CMD --wandb_enabled"
 fi
 
+# Add gradient_checkpointing flag if set to true
+if [ "$GRADIENT_CHECKPOINTING" = "true" ]; then
+    CMD="$CMD --gradient_checkpointing"
+fi
+
 # Add resume argument if checkpoint exists
 if [ -n "$RESUME_ARG" ]; then
     CMD="$CMD $RESUME_ARG"

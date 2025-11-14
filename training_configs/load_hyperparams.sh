@@ -29,6 +29,7 @@ load_hyperparams() {
         export CACHE_DIR=$(jq -r '.cache_dir // empty' "$json_file")
         export ENCODER_ONLY=$(jq -r '.encoder_only // "false"' "$json_file")
         export WANDB_ENABLED=$(jq -r '.wandb_enabled // "false"' "$json_file")
+        export GRADIENT_CHECKPOINTING=$(jq -r '.gradient_checkpointing // "false"' "$json_file")
     else
         # Fallback to python if jq is not available
         export SAVE_DIR=$(python -c "import json; print(json.load(open('$json_file')).get('save_dir', ''))")
@@ -46,6 +47,7 @@ load_hyperparams() {
         export CACHE_DIR=$(python -c "import json; print(json.load(open('$json_file')).get('cache_dir', ''))")
         export ENCODER_ONLY=$(python -c "import json; print(str(json.load(open('$json_file')).get('encoder_only', False)).lower())")
         export WANDB_ENABLED=$(python -c "import json; print(str(json.load(open('$json_file')).get('wandb_enabled', False)).lower())")
+        export GRADIENT_CHECKPOINTING=$(python -c "import json; print(str(json.load(open('$json_file')).get('gradient_checkpointing', False)).lower())")
     fi
     
     echo "Hyperparameters loaded successfully"

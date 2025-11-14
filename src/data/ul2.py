@@ -72,12 +72,21 @@ class UL2DataModule(BasicDataModule):
             if use_streaming and isinstance(corpus_list[0], IterableDataset):
                 # Interleave streaming datasets
                 self.data_train = interleave_datasets(corpus_list, seed=CONFIG.cfg_exps.seed)
+                
+                # For multi-GPU training with streaming, shard the dataset per rank
+                if self.multi_gpu and torch.distributed.is_initialized():
+                    world_size = torch.distributed.get_world_size()
+                    rank = torch.distributed.get_rank()
+                    self.data_train = self.data_train.shard(num_shards=world_size, index=rank)
             else:
                 self.data_train = self._concatenate_datasets(corpus_list)
             
             self.data_collator = data_collator(self.tokenizer, label_max_length=CONFIG.model_config.max_decoder_position_embeddings, input_max_length=CONFIG.model_config.max_encoder_position_embeddings)
 
     def train_dataloader(self) -> TRAIN_DATALOADERS:
-        sampler = torch.utils.data.distributed.DistributedSampler(self.data_train, drop_last=True) if self.multi_gpu else None
+        # For streaming datasets, sharding is done in setup() - don't use DistributedSampler
+        # For regular datasets, use DistributedSampler for multi-GPU
+        use_sampler = self.multi_gpu and not isinstance(self.data_train, IterableDataset)
+        sampler = torch.utils.data.distributed.DistributedSampler(self.data_train, drop_last=True) if use_sampler else None
         return DataLoader(self.data_train, batch_size=CONFIG.exps_config.batch_size, shuffle=(sampler is None and not isinstance(self.data_train, IterableDataset)),
                           num_workers=CONFIG.data_config.num_proc, collate_fn=self.data_collator, sampler=sampler)

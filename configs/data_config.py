@@ -4,7 +4,7 @@ def _set_args(tok, max_input_length, mlm_p):
     model_max_length = max_input_length
     mlm_probability = mlm_p
 
-num_proc = 16
+num_proc = 6  # Optimal for 4 GPUs with 24 CPUs per task (6 workers per GPU)
 max_entries_in_raw_dataset = 1e10
 preprocess_batch_size = 2048
 tok_name = "google-t5/t5-base"

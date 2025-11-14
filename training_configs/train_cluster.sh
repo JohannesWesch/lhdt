@@ -136,7 +136,8 @@ fi
 echo "=================================================="
 
 # Build training command with all parameters
-CMD="srun python pretrain.py \
+# Use srun for proper distributed training with SLURM
+CMD="srun --ntasks=$SLURM_NTASKS --ntasks-per-node=$SLURM_NTASKS_PER_NODE python pretrain.py \
     --save_dir $SAVE_DIR \
     --tok_name $TOK_NAME \
     --num_encoder_layers $NUM_ENCODER_LAYERS \
@@ -159,6 +160,11 @@ fi
 # Add wandb_enabled flag if set to true
 if [ "$WANDB_ENABLED" = "true" ]; then
     CMD="$CMD --wandb_enabled"
+fi
+
+# Add gradient_checkpointing flag if set to true
+if [ "$GRADIENT_CHECKPOINTING" = "true" ]; then
+    CMD="$CMD --gradient_checkpointing"
 fi
 
 # Add resume argument if checkpoint exists

@@ -7,12 +7,13 @@
   "max_output_length": 512,
   "mlm_probability": 0.15,
   "learning_rate": 0.001,
-  "batch_size": 4,
-  "accumulate_grad_batches": 16,
+  "batch_size": 8,
+  "accumulate_grad_batches": 8,
   "budget": 48,
   "num_gpus": 4,
   "cache_dir": "cache",
   "encoder_only": false,
-  "wandb_enabled": true
+  "wandb_enabled": true,
+  "gradient_checkpointing": false
 }
 

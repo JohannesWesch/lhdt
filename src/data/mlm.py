@@ -60,6 +60,12 @@ class MLMDataModule(BasicDataModule):
             # Use interleave_datasets for streaming, concatenate_datasets for non-streaming
             if use_streaming and isinstance(corpus_list[0], IterableDataset):
                 self.data_train = interleave_datasets(corpus_list, seed=CONFIG.cfg_exps.seed)
+                
+                # For multi-GPU training with streaming, shard the dataset per rank
+                if self.multi_gpu and torch.distributed.is_initialized():
+                    world_size = torch.distributed.get_world_size()
+                    rank = torch.distributed.get_rank()
+                    self.data_train = self.data_train.shard(num_shards=world_size, index=rank)
             else:
                 self.data_train = self._concatenate_datasets(corpus_list)
                 self._log_tokenization(self.data_train)

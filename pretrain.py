@@ -47,6 +47,7 @@ def parse_args():
     parser.add_argument("--num_gpus", default=1, type=int)
     parser.add_argument("--accumulate_grad_batches", default=16, type=int, help="Number of batches for gradient accumulation")
     parser.add_argument("--wandb_enabled", default=False, action="store_true", help="Enable Weights & Biases logging")
+    parser.add_argument("--gradient_checkpointing", default=False, action="store_true", help="Enable gradient checkpointing to save memory")
     args = parser.parse_args()
     CONFIG.set_args(args)
     return args

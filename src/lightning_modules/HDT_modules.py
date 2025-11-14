@@ -124,20 +124,33 @@ class HDTPretrain(BudgetModel):
         return self.model(**kwargs, **batch)
 
     def training_step(self, batch, batch_idx: int, *args: Any, **kwargs: Any) -> STEP_OUTPUT:
+        # Check if budget is exhausted - save final checkpoint (rank 0 only)
         if self.check_budget(self.wallclock_timer, self.budget, self.bias_timer):
-            print(f'Signal stop found, stopping at epoch {self.trainer.current_epoch}')
-            self.trainer.save_checkpoint(os.path.join(CONFIG.checkpoint_dir, "last.ckpt"))
-            self.model.eval()
-            self.model.save_pretrained(CONFIG.save_dir)
-            self.tokenizer.save_pretrained(CONFIG.save_dir)
+            if self.trainer.is_global_zero:
+                print(f'Signal stop found, stopping at epoch {self.trainer.current_epoch}')
+                self.trainer.save_checkpoint(os.path.join(CONFIG.checkpoint_dir, "last.ckpt"))
+                self.model.eval()
+                self.model.save_pretrained(CONFIG.save_dir)
+                self.tokenizer.save_pretrained(CONFIG.save_dir)
+                self.model.train()
             self.trainer.should_stop = True
-            self.trainer.strategy.barrier()
+            if hasattr(self.trainer.strategy, 'barrier'):
+                self.trainer.strategy.barrier()
+        
+        # Check if it's time for intermediate checkpoint (every budget/3 hours) - rank 0 only
         if self.check_budget(self.evaluation_timer, self.budget / 3):
-            self.model.eval()
-            save_path = os.path.join(CONFIG.save_dir, "_".join(time.asctime().split(" ")))
-            self.model.save_pretrained(save_path)
-            self.tokenizer.save_pretrained(save_path)
-            self.model.train()
+            if self.trainer.is_global_zero:
+                self.model.eval()
+                save_path = os.path.join(CONFIG.save_dir, "_".join(time.asctime().split(" ")))
+                self.model.save_pretrained(save_path)
+                self.tokenizer.save_pretrained(save_path)
+                self.model.train()
+                print(f'Intermediate checkpoint saved to {save_path}')
+            # Reset timer after saving
+            self.evaluation_timer = time.time()
+            if hasattr(self.trainer.strategy, 'barrier'):
+                self.trainer.strategy.barrier()
+        
         outputs = self.forward(batch)
         # Here we plot the mlm_loss as train loss for comparison with other methods without permutation
         self.log("train/loss", outputs.loss)
