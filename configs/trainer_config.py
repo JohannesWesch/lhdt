@@ -25,3 +25,5 @@ deterministic = True
 accumulate_grad_batches = 16
 # Disable validation for pre-training
 auto_scale_batch_size = "power"
+# Log metrics every step for real-time WandB visibility
+log_every_n_steps = 1

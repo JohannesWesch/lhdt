@@ -13,3 +13,4 @@ group = ""
 tags = []
 job_type = ""
 name = "HDT_8192"
+log_every_n_steps = 1  # Log metrics every step (visible immediately in WandB)
