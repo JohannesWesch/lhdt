@@ -15,14 +15,12 @@ from itertools import chain
 from src.utils.metrics import Scrolls, F1_classification
 
 def batch_preprocess(batch, pad_token_id):
-    batch["keep_ids"] = [torch.tensor(batch.pop("keep_ids_0"), dtype=torch.int32),
-                         torch.tensor(batch.pop("keep_ids_1"), dtype=torch.int32)] + (
-                            [torch.tensor(batch.pop("keep_ids_2"),
-                                          dtype=torch.int32)] if "keep_ids_2" in batch else [])
-    batch["hash_ids"] = [torch.tensor(batch.pop("hash_ids_0"), dtype=torch.int32),
-                         torch.tensor(batch.pop("hash_ids_1"), dtype=torch.int32)] + (
-                            [torch.tensor(batch.pop("hash_ids_2"),
-                                          dtype=torch.int32)] if "hash_ids_2" in batch else [])
+    batch["keep_ids"] = [batch.pop("keep_ids_0").to(dtype=torch.int32),
+                         batch.pop("keep_ids_1").to(dtype=torch.int32)] + (
+                            [batch.pop("keep_ids_2").to(dtype=torch.int32)] if "keep_ids_2" in batch else [])
+    batch["hash_ids"] = [batch.pop("hash_ids_0").to(dtype=torch.int32),
+                         batch.pop("hash_ids_1").to(dtype=torch.int32)] + (
+                            [batch.pop("hash_ids_2").to(dtype=torch.int32)] if "hash_ids_2" in batch else [])
     batch["position_ids"] = [batch.pop("position_ids_0"), batch.pop("position_ids_1")] + (
         [batch.pop("position_ids_2")] if "position_ids_2" in batch else [])
     batch.pop("special_tokens_mask", None)

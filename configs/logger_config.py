@@ -2,13 +2,13 @@ def _set_args(run_name):
     global name
     name = run_name
 
-offline = False
+offline = False  # Save locally, sync later with: wandb sync path/to/run
 id = None  # pass correct id to resume experiment!
 anonymous = None  # enable anonymous logging
 project = "pretrain_HDT"
 log_model: False  # upload lightning ckpts
 prefix = ""  # a string to put at the beginning of metric keys
-# entity: "" # set to name of your wandb team
+entity = None  # Use default wandb account (jo-wesch-karlsruhe-institute-of-technology)
 group = ""
 tags = []
 job_type = ""

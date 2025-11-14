@@ -1,0 +1,18 @@
+{
+  "save_dir": "logs/hdt_ed_pretrain",
+  "tok_name": "google-t5/t5-base",
+  "num_encoder_layers": 6,
+  "num_decoder_layers": 6,
+  "max_input_length": 8192,
+  "max_output_length": 512,
+  "mlm_probability": 0.15,
+  "learning_rate": 0.001,
+  "batch_size": 4,
+  "accumulate_grad_batches": 16,
+  "budget": 48,
+  "num_gpus": 4,
+  "cache_dir": "cache",
+  "encoder_only": false,
+  "wandb_enabled": true
+}
+

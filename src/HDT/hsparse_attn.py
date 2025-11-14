@@ -106,8 +106,8 @@ def _fwd_kernel(Q, K, V, hash_ids0, hash_ids1, hash_ids2,
             kh_vals = tl.where(kh_vals == 1e9, -1e9, kh_vals)
             ki = tl.load(keep_ids0 + offs_kid, mask=offs_n < N_CTX, other=0)
             ki1 = tl.load(keep_ids1 + offs_kid, mask=offs_n < N_CTX, other=0)
-            cls_mask = (qi == 1 and qi1 == 1)[:, None] and (ki == 1 and ki1 == 1)[None, :]
-            attn_mask = cls_mask == 0 and ((qi[:, None] == 1 and ki[None, :] == 1) and (qh_vals[:, None] == kh_vals[None, :]))
+            cls_mask = ((qi == 1) & (qi1 == 1))[:, None] & ((ki == 1) & (ki1 == 1))[None, :]
+            attn_mask = (cls_mask == 0) & (((qi[:, None] == 1) & (ki[None, :] == 1)) & (qh_vals[:, None] == kh_vals[None, :]))
             # -- load k, v --
             k = tl.load(K_block_ptr)
             v = tl.load(V_block_ptr)
@@ -151,8 +151,8 @@ def _fwd_kernel(Q, K, V, hash_ids0, hash_ids1, hash_ids2,
             kh2_vals = tl.load(hash_ids2 + (off_hz // H) * stride_zid + anchor_tokens, mask=anchor_tokens != -1, other=-1)
             ki1_vals = tl.load(keep_ids1 + (off_hz // H) * stride_zid + anchor_tokens, mask=anchor_tokens != -1, other=0)
             ki2_vals = tl.load(keep_ids2 + (off_hz // H) * stride_zid + anchor_tokens, mask=anchor_tokens != -1, other=0)
-            attn_mask = (((qi1_vals[:, None] == 1 and ki1_vals[None, :] == 1) and (qh1_vals[:, None] == kh1_vals[None, :]))
-                    or ((qi2_vals[:, None] == 1 and ki2_vals[None, :] == 1) and (qh2_vals[:, None] == kh2_vals[None, :])))
+            attn_mask = ((((qi1_vals[:, None] == 1) & (ki1_vals[None, :] == 1)) & (qh1_vals[:, None] == kh1_vals[None, :]))
+                    | (((qi2_vals[:, None] == 1) & (ki2_vals[None, :] == 1)) & (qh2_vals[:, None] == kh2_vals[None, :])))
             # -- compute qk ---
             qk = tl.zeros([BLOCK_M, BLOCK_N], dtype=tl.float32)
             qk = tl.where(attn_mask, qk, float("-inf"))
@@ -297,9 +297,9 @@ def _bwd_kernel_one_col_block(Q, K, V, hash_ids0, hash_ids1, hash_ids2,
         qh_vals = tl.where(qh_vals == 1e9, -1e9, qh_vals)
         qi = tl.load(keep_ids0 + offs_qid, mask=offs_m < N_CTX, other=0)
         qi1 = tl.load(keep_ids1 + offs_qid, mask=offs_m < N_CTX, other=0)
-        cls_mask = (qi == 1 and qi1 == 1)[:, None] and (ki == 1 and ki1 == 1)[None, :]
-        attn_mask = cls_mask == 0 and (
-                    (qi[:, None] == 1 and ki[None, :] == 1) and (qh_vals[:, None] == kh_vals[None, :]))
+        cls_mask = ((qi == 1) & (qi1 == 1))[:, None] & ((ki == 1) & (ki1 == 1))[None, :]
+        attn_mask = (cls_mask == 0) & (
+                    ((qi[:, None] == 1) & (ki[None, :] == 1)) & (qh_vals[:, None] == kh_vals[None, :]))
         offs_m_curr = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
 
         # load q, k, v, do on-chip
@@ -363,8 +363,8 @@ def _bwd_kernel_one_col_block(Q, K, V, hash_ids0, hash_ids1, hash_ids2,
         qh2_vals = tl.load(hash_ids2 + (off_hz // H) * stride_zid + anchor_tokens, mask=anchor_tokens != -1, other=-1)
         qi1_vals = tl.load(keep_ids1 + (off_hz // H) * stride_zid + anchor_tokens, mask=anchor_tokens != -1, other=0)
         qi2_vals = tl.load(keep_ids2 + (off_hz // H) * stride_zid + anchor_tokens, mask=anchor_tokens != -1, other=0)
-        attn_mask = (((qi1_vals[:, None] == 1 and ki1_vals[None, :] == 1) and (qh1_vals[:, None] == kh1_vals[None, :]))
-                     or ((qi2_vals[:, None] == 1 and ki2_vals[None, :] == 1) and (
+        attn_mask = ((((qi1_vals[:, None] == 1) & (ki1_vals[None, :] == 1)) & (qh1_vals[:, None] == kh1_vals[None, :]))
+                     | (((qi2_vals[:, None] == 1) & (ki2_vals[None, :] == 1)) & (
                             qh2_vals[:, None] == kh2_vals[None, :])))
         # -- compute qk ---
         if CAUSAL:

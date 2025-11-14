@@ -11,7 +11,7 @@ max_epochs = 10
 devices = 1
 accelerator = "gpu"
 # mixed precision for extra speed-up
-precision = 16
+precision = 16  # Use integer for PyTorch Lightning 1.x compatibility
 profiler = "simple"
 # perform a validation loop every N training epochs
 check_val_every_n_epoch = 1
