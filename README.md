@@ -10,13 +10,7 @@ We present HDT, a novel sparse Transformer architecture tailored for structured 
 The required Python packages for running this repo are listed in [requirements.txt](./requirements.txt) and [pyproject.toml](./pyproject.toml). 
 
 ### Using uv (Recommended)
-This repository is compatible with [uv](https://github.com/astral-sh/uv), a fast Python package installer and resolver. 
-
-#### Quick Setup (Linux/macOS)
-Run the automated setup script:
-```shell
-./setup_dev.sh
-```
+This repository is compatible with [uv](https://github.com/astral-sh/uv), a fast Python package installer and resolver.
 
 #### Manual Setup
 To install dependencies with uv manually:

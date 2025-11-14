@@ -34,7 +34,13 @@ class ListOPsDataModule(LightningDataModule):
 
         
         def preprocess_dataset(dataset):
-            encoded_inputs = self.tokenizer(dataset["text"], padding="max_length", max_length=512, truncation=True, return_tensors="pt")
+            # Convert dataset column to list of strings for tokenizer
+            texts = dataset["text"]
+            if hasattr(texts, 'tolist'):
+                texts = texts.tolist()
+            else:
+                texts = list(texts)
+            encoded_inputs = self.tokenizer(texts, padding="max_length", max_length=512, truncation=True, return_tensors="pt")
             save_listops_token_ids(self.tokenizer)
         
             tokenized_dataset = datasets.Dataset.from_dict({"input_ids": encoded_inputs["input_ids"], 
