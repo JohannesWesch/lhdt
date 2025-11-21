@@ -74,9 +74,12 @@ class BasicDataModule(LightningDataModule):
         raise NotImplementedError
 
     def train_dataloader(self) -> TRAIN_DATALOADERS:
+        # For streaming datasets, sharding is done in setup() - don't use DistributedSampler
+        # For regular datasets, use DistributedSampler for multi-GPU
+        use_sampler = self.multi_gpu and not isinstance(self.data_train, IterableDataset)
         sampler = torch.utils.data.distributed.DistributedSampler(self.data_train,
-                                                                  drop_last=True) if self.multi_gpu else None
-        return DataLoader(self.data_train, batch_size=CONFIG.cfg_exps.batch_size, shuffle=(sampler is None),
+                                                                  drop_last=True) if use_sampler else None
+        return DataLoader(self.data_train, batch_size=CONFIG.cfg_exps.batch_size, shuffle=(sampler is None and not isinstance(self.data_train, IterableDataset)),
                           num_workers=CONFIG.cfg_data.num_proc, collate_fn=self.data_collator, sampler=sampler)
 
     def val_dataloader(self) -> EVAL_DATALOADERS:

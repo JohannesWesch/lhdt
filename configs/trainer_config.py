@@ -11,7 +11,7 @@ max_epochs = 10
 devices = 1
 accelerator = "gpu"
 # mixed precision for extra speed-up
-precision = 16
+precision = 16  # Use integer for PyTorch Lightning 1.x compatibility
 profiler = "simple"
 # perform a validation loop every N training epochs
 check_val_every_n_epoch = 1
@@ -25,3 +25,5 @@ deterministic = True
 accumulate_grad_batches = 16
 # Disable validation for pre-training
 auto_scale_batch_size = "power"
+# Log metrics every step for real-time WandB visibility
+log_every_n_steps = 1

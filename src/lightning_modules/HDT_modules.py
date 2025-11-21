@@ -15,14 +15,12 @@ from itertools import chain
 from src.utils.metrics import Scrolls, F1_classification
 
 def batch_preprocess(batch, pad_token_id):
-    batch["keep_ids"] = [torch.tensor(batch.pop("keep_ids_0"), dtype=torch.int32),
-                         torch.tensor(batch.pop("keep_ids_1"), dtype=torch.int32)] + (
-                            [torch.tensor(batch.pop("keep_ids_2"),
-                                          dtype=torch.int32)] if "keep_ids_2" in batch else [])
-    batch["hash_ids"] = [torch.tensor(batch.pop("hash_ids_0"), dtype=torch.int32),
-                         torch.tensor(batch.pop("hash_ids_1"), dtype=torch.int32)] + (
-                            [torch.tensor(batch.pop("hash_ids_2"),
-                                          dtype=torch.int32)] if "hash_ids_2" in batch else [])
+    batch["keep_ids"] = [batch.pop("keep_ids_0").to(dtype=torch.int32),
+                         batch.pop("keep_ids_1").to(dtype=torch.int32)] + (
+                            [batch.pop("keep_ids_2").to(dtype=torch.int32)] if "keep_ids_2" in batch else [])
+    batch["hash_ids"] = [batch.pop("hash_ids_0").to(dtype=torch.int32),
+                         batch.pop("hash_ids_1").to(dtype=torch.int32)] + (
+                            [batch.pop("hash_ids_2").to(dtype=torch.int32)] if "hash_ids_2" in batch else [])
     batch["position_ids"] = [batch.pop("position_ids_0"), batch.pop("position_ids_1")] + (
         [batch.pop("position_ids_2")] if "position_ids_2" in batch else [])
     batch.pop("special_tokens_mask", None)
@@ -117,29 +115,53 @@ class HDTPretrain(BudgetModel):
         else:
             model_class = HDTForConditionalGeneration
         self.encoder_only = CONFIG.cfg_model.encoder_only
-        self.model = model_class(HDTConfig(**module_to_dict(CONFIG.cfg_model)))
-        # Load the trained/constructed tokenizer
+        
+        # Load the trained/constructed tokenizer first
         self.tokenizer = AutoTokenizer.from_pretrained(CONFIG.save_dir)
+        
+        # CRITICAL FIX: Use actual tokenizer vocab_size, not config default
+        # This prevents the vocab mismatch issue that causes high loss
+        model_config = HDTConfig(**module_to_dict(CONFIG.cfg_model))
+        model_config.vocab_size = len(self.tokenizer)
+        
+        # Initialize model with correct vocab_size from the start
+        self.model = model_class(model_config)
+        
+        print(f"✓ Model initialized with vocab_size={len(self.tokenizer)} (tokenizer={CONFIG.cfg_data.tok_name})")
+        print(f"  Special tokens: cls={self.tokenizer.cls_token}, sec=<sec>, doc=<doc>")
 
     def forward(self, batch, *args: Any, **kwargs: Any) -> Any:
         batch = batch_preprocess(batch, self.tokenizer.pad_token_id)
         return self.model(**kwargs, **batch)
 
     def training_step(self, batch, batch_idx: int, *args: Any, **kwargs: Any) -> STEP_OUTPUT:
+        # Check if budget is exhausted - save final checkpoint (rank 0 only)
         if self.check_budget(self.wallclock_timer, self.budget, self.bias_timer):
-            print(f'Signal stop found, stopping at epoch {self.trainer.current_epoch}')
-            self.trainer.save_checkpoint(os.path.join(CONFIG.checkpoint_dir, "last.ckpt"))
-            self.model.eval()
-            self.model.save_pretrained(CONFIG.save_dir)
-            self.tokenizer.save_pretrained(CONFIG.save_dir)
+            if self.trainer.is_global_zero:
+                print(f'Signal stop found, stopping at epoch {self.trainer.current_epoch}')
+                self.trainer.save_checkpoint(os.path.join(CONFIG.checkpoint_dir, "last.ckpt"))
+                self.model.eval()
+                self.model.save_pretrained(CONFIG.save_dir)
+                self.tokenizer.save_pretrained(CONFIG.save_dir)
+                self.model.train()
             self.trainer.should_stop = True
-            self.trainer.strategy.barrier()
+            if hasattr(self.trainer.strategy, 'barrier'):
+                self.trainer.strategy.barrier()
+        
+        # Check if it's time for intermediate checkpoint (every budget/3 hours) - rank 0 only
         if self.check_budget(self.evaluation_timer, self.budget / 3):
-            self.model.eval()
-            save_path = os.path.join(CONFIG.save_dir, "_".join(time.asctime().split(" ")))
-            self.model.save_pretrained(save_path)
-            self.tokenizer.save_pretrained(save_path)
-            self.model.train()
+            if self.trainer.is_global_zero:
+                self.model.eval()
+                save_path = os.path.join(CONFIG.save_dir, "_".join(time.asctime().split(" ")))
+                self.model.save_pretrained(save_path)
+                self.tokenizer.save_pretrained(save_path)
+                self.model.train()
+                print(f'Intermediate checkpoint saved to {save_path}')
+            # Reset timer after saving
+            self.evaluation_timer = time.time()
+            if hasattr(self.trainer.strategy, 'barrier'):
+                self.trainer.strategy.barrier()
+        
         outputs = self.forward(batch)
         # Here we plot the mlm_loss as train loss for comparison with other methods without permutation
         self.log("train/loss", outputs.loss)

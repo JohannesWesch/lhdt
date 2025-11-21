@@ -1,3 +1,19 @@
+import warnings
+import os
+
+# Filter out known warnings BEFORE importing other modules
+warnings.filterwarnings('ignore', message='.*pkg_resources is deprecated.*')
+warnings.filterwarnings('ignore', message='.*resume_download.*is deprecated.*')
+warnings.filterwarnings('ignore', message='.*The PyTorch API of nested tensors is in prototype stage.*')
+warnings.filterwarnings('ignore', message='.*GradScaler.*is deprecated.*')
+warnings.filterwarnings('ignore', category=FutureWarning, module='pytorch_lightning')
+warnings.filterwarnings('ignore', category=FutureWarning, module='lightning_fabric')
+
+# Suppress SLURM warning when running locally (not in SLURM environment)
+if 'SLURM_JOB_ID' not in os.environ:
+    warnings.filterwarnings('ignore', message='.*srun.*command is available.*')
+    warnings.filterwarnings('ignore', category=UserWarning, message='.*srun.*')
+
 import torch
 import random
 import argparse
@@ -10,6 +26,9 @@ from pytorch_lightning.loggers.wandb import WandbLogger
 from src.utils import module_to_dict
 import configs as CONFIG
 
+# Set float32 matmul precision for better performance on Tensor Cores
+torch.set_float32_matmul_precision('high')
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -21,12 +40,14 @@ def parse_args():
     parser.add_argument("--max_input_length", default=8192, type=int, help="Maximum input context length")
     parser.add_argument("--max_output_length", default=512, type=int, help="Maximum output context length (only valid for encoder-decoder model)")
     parser.add_argument("--mlm_probability", default=0.15, type=float)
-    parser.add_argument("--lr", default=1e-3, help="Learning Rate")
-    parser.add_argument("--batch_size", default=4)
+    parser.add_argument("--lr", default=1e-3, type=float, help="Learning Rate")
+    parser.add_argument("--batch_size", default=4, type=int)
     parser.add_argument("--budget", default=24, type=float, help="Number of hours the pre-training continues")
     parser.add_argument("--encoder_only", default=False, action="store_true", help="Encoder-only model or encoder-decoder model")
     parser.add_argument("--num_gpus", default=1, type=int)
     parser.add_argument("--accumulate_grad_batches", default=16, type=int, help="Number of batches for gradient accumulation")
+    parser.add_argument("--wandb_enabled", default=False, action="store_true", help="Enable Weights & Biases logging")
+    parser.add_argument("--gradient_checkpointing", default=False, action="store_true", help="Enable gradient checkpointing to save memory")
     args = parser.parse_args()
     CONFIG.set_args(args)
     return args
@@ -41,9 +62,24 @@ def main():
     dataloader.prepare_data()
     CONFIG.cfg_model.vocab_size = len(dataloader.tokenizer)
     model = HDTPretrain(vocab_size=len(dataloader.tokenizer))
-    logger = WandbLogger(save_dir=CONFIG.save_dir, **module_to_dict(CONFIG.cfg_logger))
+    
+    # Conditionally enable wandb logging with error handling
+    if args.wandb_enabled:
+        try:
+            logger = WandbLogger(save_dir=CONFIG.save_dir, **module_to_dict(CONFIG.cfg_logger))
+            callbacks = [LearningRateMonitor(logging_interval='step')]
+            print("WandB logging enabled successfully.")
+        except Exception as e:
+            print(f"Warning: Failed to initialize WandB logger: {e}")
+            print("Continuing training without WandB logging...")
+            logger = None
+            callbacks = []
+    else:
+        logger = None
+        callbacks = []  # No callbacks when logging is disabled
+        print("WandB logging disabled. Training without experiment tracking.")
 
-    trainer = Trainer(**module_to_dict(CONFIG.cfg_trainer), logger=logger, callbacks=[LearningRateMonitor(logging_interval='step')])
+    trainer = Trainer(**module_to_dict(CONFIG.cfg_trainer), logger=logger, callbacks=callbacks)
     trainer.fit(model=model, train_dataloaders=dataloader)
 
 

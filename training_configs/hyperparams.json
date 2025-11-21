@@ -1,0 +1,18 @@
+{
+  "save_dir": "logs/hdt_e_paper_replication",
+  "tok_name": "google-bert/bert-base-uncased",
+  "num_encoder_layers": 12,
+  "num_decoder_layers": 6,
+  "max_input_length": 8192,
+  "max_output_length": 512,
+  "mlm_probability": 0.15,
+  "learning_rate": 0.001,
+  "batch_size": 2,
+  "accumulate_grad_batches": 16,
+  "budget": 24,
+  "num_gpus": 1,
+  "cache_dir": "cache",
+  "encoder_only": true,
+  "wandb_enabled": true,
+  "gradient_checkpointing": false
+}

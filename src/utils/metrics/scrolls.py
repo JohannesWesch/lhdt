@@ -4,6 +4,30 @@ from collections import defaultdict
 from copy import deepcopy
 import datasets
 
+# Compatibility fix for newer datasets versions
+try:
+    import evaluate
+    MetricBase = evaluate.Metric
+    MetricInfo = evaluate.MetricInfo
+    add_start_docstrings = evaluate.utils.file_utils.add_start_docstrings
+except (ImportError, AttributeError):
+    # Fall back to datasets.Metric for older versions
+    try:
+        MetricBase = datasets.Metric
+        MetricInfo = datasets.MetricInfo
+        add_start_docstrings = datasets.utils.file_utils.add_start_docstrings
+    except AttributeError:
+        # If neither works, create a simple base class
+        class MetricBase:
+            def __init__(self, *args, config_name=None, **kwargs):
+                self.config_name = config_name
+            def _info(self):
+                pass
+            def _compute(self, predictions, references):
+                pass
+        MetricInfo = dict
+        add_start_docstrings = lambda *args: lambda x: x
+
 # fmt: off
 from .rouge import compute_rouge, postprocess_text as rouge_postprocess_text  # From: https://huggingface.co/datasets/tau/scrolls/raw/main/metrics/rouge.py
 from .exact_match import compute_exact_match  # From: https://huggingface.co/datasets/tau/scrolls/raw/main/metrics/exact_match.py
@@ -170,8 +194,8 @@ def default_transform_aggregated_result_fn(x):
     return x
 
 
-@datasets.utils.file_utils.add_start_docstrings(_DESCRIPTION, _KWARGS_DESCRIPTION)
-class Scrolls(datasets.Metric):
+@add_start_docstrings(_DESCRIPTION, _KWARGS_DESCRIPTION)
+class Scrolls(MetricBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -199,19 +223,28 @@ class Scrolls(datasets.Metric):
             self._metrics_to_compute = DATASET_TO_METRICS[self.config_name]["metrics_to_compute"]
 
     def _info(self):
-        return datasets.MetricInfo(
-            description=_DESCRIPTION,
-            citation=_CITATION,
-            inputs_description=_KWARGS_DESCRIPTION,
-            features=datasets.Features(
+        try:
+            features = datasets.Features(
                 {
                     "predictions": datasets.Value("string"),
                     "references": datasets.Sequence(datasets.Value("string")),
                 }
-            ),
-            codebase_urls=[],
-            reference_urls=[],
-        )
+            )
+            return MetricInfo(
+                description=_DESCRIPTION,
+                citation=_CITATION,
+                inputs_description=_KWARGS_DESCRIPTION,
+                features=features,
+                codebase_urls=[],
+                reference_urls=[],
+            )
+        except Exception:
+            # Fallback for compatibility
+            return {
+                "description": _DESCRIPTION,
+                "citation": _CITATION,
+                "inputs_description": _KWARGS_DESCRIPTION,
+            }
 
     def convert_from_map_format(self, id_to_pred, id_to_labels):
         index_to_id = list(id_to_pred.keys())

@@ -1,0 +1,36 @@
+[project]
+name = "hdt"
+version = "0.1.0"
+requires-python = ">=3.9"
+
+dependencies = [
+    "torch>=1.10.0",
+    "torchvision>=0.11.0",
+    "pytorch-lightning==1.9.4",
+    "transformers==4.38.0",
+    "triton>=2.2.0",
+    "torchmetrics",
+    "nltk",
+    "datasets",
+    "einops",
+    "lmdb",
+    "scikit-learn",
+    "pytrec_eval",
+    "sklearn-contrib-lightning",
+    "pandas",
+    "omegaconf",
+    "hydra-core",
+    "rouge_score",
+    "wandb",
+    "Cython",
+    "tensorboard",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    "black>=23.0",
+    "isort>=5.0",
+    "flake8>=6.0",
+]
+

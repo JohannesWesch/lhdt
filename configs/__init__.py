@@ -11,8 +11,9 @@ def set_args(args):
     cache_dir = args.cache_dir
     checkpoint_dir = args.save_dir
     cfg_data._set_args(args.tok_name, args.max_input_length, args.mlm_probability)
+    gradient_checkpoint = getattr(args, 'gradient_checkpointing', False)
     cfg_model._set_args(args.encoder_only, args.max_input_length, args.max_output_length, args.num_encoder_layers,
-                       args.num_decoder_layers)
+                       args.num_decoder_layers, gradient_checkpoint)
     cfg_exps._set_args(args.lr, args.batch_size, args.budget)
     cfg_trainer._set_args(args.num_gpus, args.accumulate_grad_batches)
     cfg_logger._set_args(f"HDT_{args.max_input_length}_{args.max_output_length}_encoder_{'' if args.encoder_only else 'decoder'}")

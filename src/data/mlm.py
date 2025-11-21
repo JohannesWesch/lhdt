@@ -3,7 +3,7 @@ from src.data.basic import BasicDataModule
 from src.HDT import HDTTokenizer
 from pytorch_lightning.utilities.types import TRAIN_DATALOADERS, EVAL_DATALOADERS
 from src.utils.data_collators import DataCollatorForMaskedLanguageModeling
-from datasets import load_dataset, concatenate_datasets, load_from_disk, IterableDataset
+from datasets import load_dataset, concatenate_datasets, load_from_disk, IterableDataset, interleave_datasets
 from torch.utils.data.dataloader import DataLoader
 from src.utils import module_to_dict
 from transformers import AutoTokenizer
@@ -19,13 +19,44 @@ class MLMDataModule(BasicDataModule):
 
     def prepare_data(self) -> None:
         if not self.prepared:
-            corpus_list = []
-            for cfg_dict in CONFIG.cfg_data.ds_info:
-                raw_dataset = load_dataset(**cfg_dict, cache_dir=CONFIG.cache_dir)
-                corpus_list.append(raw_dataset)
-            raw_data = self._concatenate_datasets(corpus_list)
-            self.tokenizer = self._get_tokenizer(raw_data)
-            self.tokenizer.save_pretrained(CONFIG.save_dir)
+            # When using streaming, we just use the pre-trained tokenizer
+            use_streaming = getattr(CONFIG.data_config, 'use_streaming', True)
+            
+            if use_streaming:
+                # Use pre-trained tokenizer for streaming
+                if CONFIG.data_config.tok_name not in ["BPE", "Unigram", "WordLevel", "WordPiece", "WordPieceBERT", "SentencePieceUnigram", "SentencePieceBPE"]:
+                    self.tokenizer = AutoTokenizer.from_pretrained(
+                        CONFIG.cfg_data.tok_name, 
+                        cls_token="<cls>", 
+                        bos_token="<s>",
+                        model_max_length=CONFIG.model_config.max_encoder_position_embeddings
+                    )
+                    # Add mask_token if not present (e.g., T5 doesn't have one by default)
+                    if self.tokenizer.mask_token is None:
+                        self.tokenizer.add_special_tokens({'mask_token': '<mask>'})
+                    
+                    # Add special tokens if they are defined (e.g., for hierarchical models)
+                    if hasattr(self, "special_tokens") and self.special_tokens:
+                        special_tokens_to_add = []
+                        for tok_name, tok in self.special_tokens.items():
+                            if tok_name == "additional_special_tokens" and isinstance(tok, list):
+                                self.tokenizer.add_special_tokens({tok_name: tok}, replace_additional_special_tokens=False)
+                            elif tok_name in self.tokenizer.special_tokens_map.keys():
+                                self.tokenizer.add_special_tokens({tok_name: tok})
+                            else:
+                                special_tokens_to_add.append(tok)
+                        if special_tokens_to_add:
+                            self.tokenizer.add_tokens(special_tokens_to_add)
+                    self.tokenizer.save_pretrained(CONFIG.save_dir)
+            else:
+                # Download datasets and train tokenizer
+                corpus_list = []
+                for cfg_dict in CONFIG.cfg_data.ds_info:
+                    raw_dataset = load_dataset(**cfg_dict, cache_dir=CONFIG.cache_dir)
+                    corpus_list.append(raw_dataset)
+                raw_data = self._concatenate_datasets(corpus_list)
+                self.tokenizer = self._get_tokenizer(raw_data)
+                self.tokenizer.save_pretrained(CONFIG.save_dir)
             self.prepared = True
 
     def setup(self, stage: str) -> None:
@@ -33,11 +64,27 @@ class MLMDataModule(BasicDataModule):
         self.data_collator = DataCollatorForMaskedLanguageModeling(self.tokenizer, CONFIG.cfg_data.mlm_probability, input_max_length=CONFIG.cfg_data.model_max_length, hierarchical=CONFIG.hierarchical)
         if stage == "fit":
             corpus_list = []
+            use_streaming = getattr(CONFIG.data_config, 'use_streaming', True)
+            
             for cfg_dict in CONFIG.cfg_data.ds_info:
-                raw_dataset = load_dataset(**cfg_dict, cache_dir=CONFIG.cache_dir)
+                if use_streaming:
+                    raw_dataset = load_dataset(**cfg_dict, streaming=True)
+                else:
+                    raw_dataset = load_dataset(**cfg_dict, cache_dir=CONFIG.cache_dir)
                 corpus_list.append(raw_dataset)
-            self.data_train = self._concatenate_datasets(corpus_list)
-            self._log_tokenization(self.data_train)
+            
+            # Use interleave_datasets for streaming, concatenate_datasets for non-streaming
+            if use_streaming and isinstance(corpus_list[0], IterableDataset):
+                self.data_train = interleave_datasets(corpus_list, seed=CONFIG.cfg_exps.seed)
+                
+                # For multi-GPU training with streaming, shard the dataset per rank
+                if self.multi_gpu and torch.distributed.is_initialized():
+                    world_size = torch.distributed.get_world_size()
+                    rank = torch.distributed.get_rank()
+                    self.data_train = self.data_train.shard(num_shards=world_size, index=rank)
+            else:
+                self.data_train = self._concatenate_datasets(corpus_list)
+                self._log_tokenization(self.data_train)
             # self.data_train = preprocess(self.data_train, self.tokenizer, self.cfg_data)
         elif stage == "test":
             ## Validation set always use AG_news

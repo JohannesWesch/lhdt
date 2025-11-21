@@ -7,7 +7,32 @@ We present HDT, a novel sparse Transformer architecture tailored for structured 
 
 ![HDT](./assets/model_architecture.png)
 ## 🌟 Requirements
-The required Python packages for running this repo are listed in [requirements.txt](./requirements.txt). To install these pacakages at one time, plaese run
+The required Python packages for running this repo are listed in [requirements.txt](./requirements.txt) and [pyproject.toml](./pyproject.toml). 
+
+### Using uv (Recommended)
+This repository is compatible with [uv](https://github.com/astral-sh/uv), a fast Python package installer and resolver.
+
+#### Manual Setup
+To install dependencies with uv manually:
+
+```shell
+# Install uv if you haven't already
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Sync dependencies (creates venv and installs all dependencies)
+uv sync
+
+# Activate the virtual environment
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Compile Cython extensions for ListOps
+cd ListOPs/cython_attention_mask
+python setup.py build_ext --inplace
+cd ../..
+```
+
+### Using pip
+Alternatively, you can use pip to install the packages:
 ```shell
 pip install -r requirements.txt
 ```
@@ -24,7 +49,6 @@ python run_experiment.py 0.25 5 20 90000 12 128 1 512 300 120 0.0003 fixed blue 
 ```
 > [!NOTE]
 > Currently our customized attention kernel only supports three-level hierarchy, we don't use it for the ListOps tasks where the depths could be much larger, e.g., 20. We create hierarchical attention mask and directly apply the mask on the attention score matrix. A more flexible kernel will be released soon which supports arbitrary levels of hierarchy.
-> We use cython to speed up the computation of our sparse attention mask. The cython code needs to be compiled on your system before your run the code. `python setup.py build_ext --inplace`
 ## 📊 Datasets
  
 ### Pre-training Data

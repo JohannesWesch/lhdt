@@ -25,9 +25,12 @@ def get_budget_inv_sqrt_scheduler(optimizer, hour_budget, num_warmup_steps, num_
 
     def lr_lambda(current_step: int):
         fake_step = _get_fake_step(current_step, initial_time, hour_budget, num_training_steps)
-        if fake_step < num_warmup_steps:
+        if fake_step == 0:
+            # Handle initial step: return 0 if warmup, else small value
+            return 0.0 if num_warmup_steps > 0 else 1.0
+        elif fake_step < num_warmup_steps:
             return float(fake_step / num_warmup_steps)
-        elif fake_step > (num_training_steps - num_cooldown_steps):
+        elif num_cooldown_steps > 0 and fake_step > (num_training_steps - num_cooldown_steps):
             return max(0.0, float(decayed_lr * (num_training_steps - fake_step) / num_cooldown_steps))
         else:
             return float(decay_factor * fake_step**-0.5)
